@@ -266,15 +266,29 @@
         });
 
         function processData(data) {
-            // FIX: Auto-detect internal bot errors that were marked as "Success" in old JSON files
+            // FIX: Auto-detect internal bot errors and handle API Gateway body format
             data.forEach(r => {
-                const resp = r.response || {};
+                let resp = r.response || {};
+                
+                // Handle API Gateway body format
+                if (resp.body) {
+                    try {
+                        const parsed = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
+                        // Merge the body content back into response so the dashboard sees it
+                        r.response = { ...resp, ...parsed };
+                        resp = r.response;
+                    } catch (e) { console.error("Body parse error", e); }
+                }
+
                 // If the bot returned an error intent/flag but the status was saved as Success, fix it
                 if (r.status === 'Success' && (resp.intent === 'error' || resp.error === true)) {
                     r.status = 'Error';
                     // Capture the reasoning for the UI
                     r.error = resp.reasoning || resp.message || "Internal Bot Failure";
                 }
+
+                // Normalize category name
+                if (r.query_type === 'Manual-Run') r.query_type = 'portcall';
             });
 
             currentResults = data;
