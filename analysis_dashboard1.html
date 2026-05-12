@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Test Analysis Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+        }
+        .status-success { color: #10b981; }
+        .status-error { color: #ef4444; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .bot-preview-container {
+            background: #0f172a;
+            color: #f8fafc;
+            border-radius: 12px;
+            overflow: auto;
+            max-height: 800px;
+        }
+
+        /* Nuclear Override for Bot Content Visibility */
+        #previewBotAnswer * {
+            background-color: transparent !important;
+            color: #f1f5f9 !important; /* High contrast slate-100 */
+        }
+        
+        /* Specific element overrides to ensure they don't get lost */
+        #previewBotAnswer .dia-title, 
+        #previewBotAnswer h1, 
+        #previewBotAnswer h2, 
+        #previewBotAnswer h3 {
+            color: #60a5fa !important; /* Bright blue for headers */
+            font-weight: 800 !important;
+        }
+
+        #previewBotAnswer .dia-kpi-value {
+            color: #3b82f6 !important;
+            font-size: 2.5rem !important;
+            font-weight: 800 !important;
+        }
+
+        #previewBotAnswer table, 
+        #previewBotAnswer .dia-table,
+        #previewBotAnswer .data-table {
+            background-color: rgba(30, 41, 59, 0.5) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+
+        #previewBotAnswer th {
+            background-color: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+        }
+
+        #previewBotAnswer .dia-pill {
+            background-color: rgba(59, 130, 246, 0.2) !important;
+            color: #60a5fa !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-4xl font-bold tracking-tight mb-2">Test Analysis <span class="text-blue-500">Dashboard</span></h1>
+                <p class="text-slate-400">Analyze performance and data integrity of your RAG-Bot runs.</p>
+            </div>
+            <div>
+                <input type="file" id="fileInput" class="hidden" accept=".json">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Upload test_results.json
+                </button>
+            </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10" id="metricsRow" style="display: none;">
+            <div class="glass-card p-6">
+                <p class="text-slate-400 text-sm font-medium mb-1">Total Questions</p>
+                <div class="flex items-baseline gap-2">
+                    <p class="text-3xl font-bold" id="metricTotal">0</p>
+                </div>
+            </div>
+            <div class="glass-card p-6">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-emerald-400">Success Rate</p>
+                <p class="text-3xl font-bold text-emerald-500" id="metricRate">0%</p>
+            </div>
+            <div class="glass-card p-6 border-l-4 border-blue-500">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-blue-400">Fast (< 30s)</p>
+                <p class="text-3xl font-bold text-blue-500" id="metricFast">0</p>
+            </div>
+            <div class="glass-card p-6 border-l-4 border-orange-500">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-orange-400">Avg (30-60s)</p>
+                <p class="text-3xl font-bold text-orange-500" id="metricAvgRange">0</p>
+            </div>
+            <div class="glass-card p-6 border-l-4 border-red-500">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-red-400">Slow (> 60s)</p>
+                <p class="text-3xl font-bold text-red-500" id="metricSlow">0</p>
+            </div>
+            <div class="glass-card p-6">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-red-400">Errors</p>
+                <p class="text-3xl font-bold text-red-500" id="metricFailed">0</p>
+            </div>
+            <div class="glass-card p-6 bg-blue-600/5">
+                <p class="text-slate-400 text-sm font-medium mb-1 text-blue-400">Avg. Latency</p>
+                <p class="text-3xl font-bold text-blue-400" id="metricAvgTime">0s</p>
+            </div>
+        </div>
+
+        <!-- Performance Row -->
+        <div class="glass-card p-6 mb-10" id="performanceRow" style="display: none;">
+            <h3 class="text-lg font-semibold mb-6">Individual Question Performance (Seconds)</h3>
+            <div class="h-[200px]">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+
+
+        <!-- Detailed Category Table -->
+        <div class="glass-card p-6 mb-10" id="categoryTableContainer" style="display: none;">
+            <h3 class="text-lg font-semibold mb-6">Detailed Category Breakdown</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-slate-400 border-b border-white/5">
+                        <tr>
+                            <th class="pb-3">Query Type</th>
+                            <th class="pb-3">Total Questions</th>
+                            <th class="pb-3">Avg Latency</th>
+                            <th class="pb-3">Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoryTableBody" class="divide-y divide-white/5">
+                        <!-- Injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Results Table -->
+        <div class="glass-card overflow-hidden" id="resultsTableContainer" style="display: none;">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                <h3 class="text-lg font-semibold">Detailed Run Logs</h3>
+                <div class="text-sm text-slate-400">Click a question to preview the bot's response</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-slate-400 text-sm border-b border-white/5">
+                            <th class="px-6 py-4 font-semibold uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-4 font-semibold uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-4 font-semibold uppercase tracking-wider">Time</th>
+                            <th class="px-6 py-4 font-semibold uppercase tracking-wider">Question</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody">
+                        <!-- Rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Initial State -->
+        <div id="emptyState" class="flex flex-col items-center justify-center py-32 glass-card">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h2 class="text-xl font-semibold text-slate-400">No Data Loaded</h2>
+            <p class="text-slate-500 mt-2">Upload your <code class="bg-slate-800 px-2 py-1 rounded text-slate-300">test_results.json</code> to start analysis.</p>
+        </div>
+
+        <!-- Preview Modal -->
+        <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 hidden">
+            <div class="glass-card w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-slate-900/50">
+                    <div class="flex items-center gap-6">
+                        <div>
+                            <p id="previewSubtitle" class="text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-1"></p>
+                            <h4 class="font-bold text-xl text-white" id="previewTitle">Question Preview</h4>
+                        </div>
+                        <div class="h-10 w-px bg-white/10"></div>
+                        <div class="bg-slate-800/50 px-4 py-2 rounded-lg border border-white/5">
+                            <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Duration</p>
+                            <p class="text-sm font-mono text-blue-400" id="previewDuration">--</p>
+                        </div>
+                    </div>
+                    <button onclick="closePreview()" class="text-slate-400 hover:text-white transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-900/30">
+                    <div id="previewBotAnswer" class="w-full"></div>
+                    
+                    <div id="errorSection" class="hidden mt-4">
+                        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-8 text-center">
+                            <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <h4 class="text-xl font-bold text-red-500 mb-2" id="errorMessage">Execution Failed</h4>
+                            <p class="text-slate-400 max-w-md mx-auto mb-6" id="errorDetail"></p>
+                        </div>
+                    </div>
+
+                        <div class="mt-8">
+                            <button onclick="toggleRawResponse()" class="text-[10px] uppercase font-bold text-slate-500 hover:text-blue-400 transition-colors flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                                View Raw Lambda Response
+                            </button>
+                            <pre id="rawResponse" class="hidden mt-4 p-4 bg-slate-900 rounded-lg text-[10px] text-slate-500 overflow-auto max-h-40 border border-white/5 font-mono"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Safe element setter to prevent crashes
+        function safeSet(id, value, attr = 'innerText') {
+            const el = document.getElementById(id);
+            if (el) el[attr] = value;
+        }
+        let currentResults = [];
+        let performanceChart = null;
+        let statusChart = null;
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    let content = e.target.result;
+                    // Remove UTF-8 BOM if present
+                    if (content.charCodeAt(0) === 0xFEFF) {
+                        content = content.substr(1);
+                    }
+                    const data = JSON.parse(content);
+                    processData(data);
+                } catch (err) {
+                    console.error("Detailed JSON Parse Error:", err);
+                    alert('Error parsing JSON file: ' + err.message + '\n\nPlease ensure you are uploading the correct "test_results.json" file.');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        function processData(data) {
+            // FIX: Auto-detect internal bot errors that were marked as "Success" in old JSON files
+            data.forEach(r => {
+                const resp = r.response || {};
+                // If the bot returned an error intent/flag but the status was saved as Success, fix it
+                if (r.status === 'Success' && (resp.intent === 'error' || resp.error === true)) {
+                    r.status = 'Error';
+                    // Capture the reasoning for the UI
+                    r.error = resp.reasoning || resp.message || "Internal Bot Failure";
+                }
+            });
+
+            currentResults = data;
+            
+            // Hide empty state, show dashboard
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('metricsRow').style.display = 'grid';
+            document.getElementById('performanceRow').style.display = 'block';
+            document.getElementById('categoryTableContainer').style.display = 'block';
+            document.getElementById('resultsTableContainer').style.display = 'block';
+
+            // Metrics
+            const total = data.length;
+            const successCount = data.filter(r => r.status === 'Success').length;
+            const failedCount = total - successCount;
+            const rate = total ? ((successCount / total) * 100).toFixed(1) : 0;
+            
+            const times = data.filter(r => r.status === 'Success').map(r => r.duration);
+            const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : 0;
+
+            const fastCount = data.filter(r => r.status === 'Success' && r.duration < 30).length;
+            const avgRangeCount = data.filter(r => r.status === 'Success' && r.duration >= 30 && r.duration <= 60).length;
+            const slowCount = data.filter(r => r.status === 'Success' && r.duration > 60).length;
+
+            document.getElementById('metricTotal').innerText = total;
+            document.getElementById('metricRate').innerText = rate + '%';
+            document.getElementById('metricAvgTime').innerText = avgTime + 's';
+            document.getElementById('metricFailed').innerText = failedCount;
+            document.getElementById('metricFast').innerText = fastCount;
+            document.getElementById('metricAvgRange').innerText = avgRangeCount;
+            document.getElementById('metricSlow').innerText = slowCount;
+
+            // Category Table
+            renderCategoryTable(data);
+            
+            // Performance Chart
+            renderCharts(data);
+
+            // Results Table
+            const tbody = document.getElementById('resultsTableBody');
+            tbody.innerHTML = '';
+            data.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors group';
+                tr.onclick = (e) => {
+                    if (e.target.tagName !== 'BUTTON') showPreview(index);
+                };
+                
+                const statusColor = row.status === 'Success' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500';
+                const duration = row.duration ? row.duration.toFixed(1) + 's' : '--';
+                const qType = row.query_type || 'General';
+                
+                tr.innerHTML = `
+                    <td class="py-4 px-6">
+                        <span class="px-2 py-1 rounded text-[10px] font-bold ${statusColor}">
+                            ${row.status}
+                        </span>
+                    </td>
+                    <td class="py-4 px-6 text-blue-400 text-[10px] font-bold uppercase tracking-widest">${qType}</td>
+                    <td class="py-4 px-6 font-mono text-slate-400">${duration}</td>
+                    <td class="py-4 px-6 text-slate-200 text-sm font-medium">${row.question}</td>
+                    <td class="py-4 px-6 text-right">
+                        <button class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100">
+                            View
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCategoryTable(data) {
+            const stats = {};
+            data.forEach(r => {
+                const type = r.query_type || 'General';
+                if (!stats[type]) stats[type] = { count: 0, time: 0, success: 0 };
+                stats[type].count++;
+                stats[type].time += (r.duration || 0);
+                if (r.status === 'Success') stats[type].success++;
+            });
+
+            const tbody = document.getElementById('categoryTableBody');
+            tbody.innerHTML = '';
+
+            Object.entries(stats).forEach(([type, s]) => {
+                const avg = (s.time / s.count).toFixed(1);
+                const successRate = Math.round((s.success / s.count) * 100);
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-4 font-semibold text-slate-200">${type}</td>
+                    <td class="py-4 text-slate-400">${s.count}</td>
+                    <td class="py-4 font-mono ${avg > 60 ? 'text-red-400' : avg > 30 ? 'text-orange-400' : 'text-blue-400'}">${avg}s</td>
+                    <td class="py-4 font-bold ${successRate > 90 ? 'text-emerald-500' : successRate > 70 ? 'text-orange-500' : 'text-red-500'}">${successRate}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCharts(data) {
+            if (performanceChart) performanceChart.destroy();
+
+            const labels = data.map((_, i) => `Q${i+1}`);
+            const durations = data.map(r => r.duration || 0);
+            
+            const ctx1 = document.getElementById('performanceChart').getContext('2d');
+            performanceChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Duration (s)',
+                        data: durations,
+                        backgroundColor: durations.map(d => d > 60 ? '#ef4444' : d > 30 ? '#f59e0b' : '#3b82f6'),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function showPreview(index) {
+            const item = currentResults[index];
+            const isSuccess = item.status === 'Success';
+            
+            safeSet('previewTitle', item.question);
+            safeSet('previewSubtitle', `${item.query_type || 'General'} | ${item.status}`);
+            safeSet('previewDuration', item.duration ? item.duration.toFixed(2) + 's' : 'N/A');
+            
+            // Toggle Success vs Error views
+            const answerEl = document.getElementById('previewBotAnswer');
+            const errorEl = document.getElementById('errorSection');
+            if (answerEl) answerEl.parentElement.classList.toggle('hidden', !isSuccess);
+            if (errorEl) errorEl.classList.toggle('hidden', isSuccess);
+
+            if (isSuccess) {
+                const container = document.getElementById('previewBotAnswer');
+                if (container) {
+                    // Handle Chunked Responses or Single Answer
+                    let finalAnswer = "";
+                    
+                    if (item.response?.answer && item.response.answer.trim().length > 50) {
+                        finalAnswer = item.response.answer;
+                    } 
+                    else if (item.response?.response_sections && item.response.response_sections.length > 0) {
+                        finalAnswer = item.response.response_sections.map(sec => {
+                            let cleanPreview = (sec.preview || "")
+                                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+                                .replace(/[.#][\w-]+\s*\{[\s\S]*?\}/g, "")
+                                .replace(/\s+/g, " ")
+                                .trim();
+                            
+                            return `<div class="mb-6">
+                                <h6 class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 border-b border-white/5 pb-1">${sec.title}</h6>
+                                <div class="section-content text-slate-300">${cleanPreview}</div>
+                            </div>`;
+                        }).join('');
+                    } else {
+                        finalAnswer = item.response?.answer || "<p class='p-4 text-gray-500 text-center'>No visual dashboard available for this response.</p>";
+                    }
+                    
+                    container.innerHTML = finalAnswer;
+                    
+                    // Execute scripts inside the injected HTML (for Chart.js)
+                    const scripts = container.getElementsByTagName('script');
+                    for (let i = 0; i < scripts.length; i++) {
+                        try { eval(scripts[i].innerText); } catch (e) { console.error("Error executing bot script:", e); }
+                    }
+                }
+            } else {
+                safeSet('errorMessage', item.error || "Execution Failed");
+                safeSet('errorDetail', item.response?.message || item.response?.error || "Check the raw response for more details.");
+            }
+            
+            // Raw Response
+            document.getElementById('rawResponse').innerText = JSON.stringify(item.response || item, null, 2);
+            document.getElementById('rawResponse').classList.add('hidden');
+
+            document.getElementById('previewModal').classList.remove('hidden');
+        }
+
+        function toggleRawResponse() {
+            const el = document.getElementById('rawResponse');
+            el.classList.toggle('hidden');
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
